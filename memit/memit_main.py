@@ -52,11 +52,8 @@ def apply_memit_to_model(
     with torch.no_grad():
         for w_name, (key_mat, val_mat, preservation_distance, new_edit_distance, old_edit_distance, inside_norms) in deltas.items():
 
-            if hparams.use_gd:
-                upd_matrix = key_mat.to("cuda")
-            else:
-                key_mat, val_mat = key_mat.to("cuda"), val_mat.to("cuda")
-                upd_matrix = key_mat @ val_mat.T
+            key_mat, val_mat = key_mat.to("cuda"), val_mat.to("cuda")
+            upd_matrix = key_mat @ val_mat.T
 
             w = nethook.get_parameter(model, w_name)
             upd_matrix = upd_matrix_match_shape(upd_matrix, w.shape)
@@ -404,33 +401,18 @@ def get_cov(
     feature_key = (model_name, layer_name, 'preserved_keys')
 
     print(f"Retrieving covariance statistics for {model_name} @ {layer_name}.")
-    if key not in COV_CACHE or hparams.use_gd:
-
-        if hparams.use_gd and hparams.dynamic_multiplier > 0:
-            stat, preserved_keys = layer_stats_dynamic(
-                model,
-                tok,
-                layer_name,
-                STATS_DIR,
-                mom2_dataset,
-                to_collect=["mom2"],
-                sample_size=mom2_n_samples,
-                precision=mom2_dtype,
-                force_recompute=force_recompute,
-                hparams=hparams
-            )
-        else:
-            stat, preserved_keys = layer_stats(
-                model,
-                tok,
-                layer_name,
-                STATS_DIR,
-                mom2_dataset,
-                to_collect=["mom2"],
-                sample_size=mom2_n_samples,
-                precision=mom2_dtype,
-                force_recompute=force_recompute,
-            )
+    if key not in COV_CACHE:
+        stat, preserved_keys = layer_stats(
+            model,
+            tok,
+            layer_name,
+            STATS_DIR,
+            mom2_dataset,
+            to_collect=["mom2"],
+            sample_size=mom2_n_samples,
+            precision=mom2_dtype,
+            force_recompute=force_recompute,
+        )
 
         
         COV_CACHE[key] = stat.mom2.moment().float().to("cpu")
